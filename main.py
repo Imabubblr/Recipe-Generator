@@ -4,7 +4,7 @@ import os
 # Initialize client — make sure your API key is set in environment variable GEMINI_API_KEY
 api_key = os.environ.get("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key)
-#$env:GEMINI_API_KEY (This initializes api key)
+#$env:GEMINI_API_KEY (This initializes api)
 
 def get_dishes_with_prep(ingredients, style, num_options=3):
     prompt = (

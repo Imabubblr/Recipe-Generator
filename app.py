@@ -1,13 +1,26 @@
 from flask import Flask, render_template, request, redirect, url_for
-from google import genai
-from google.genai.errors import ClientError
+from openai import OpenAI
 import os
+from dotenv import load_dotenv
 
+# Load environment variables from .env file
+load_dotenv()
 
 app = Flask(__name__)
-api_key = os.environ.get("GEMINI_API_KEY")
-client = genai.Client(api_key=api_key)
-# set GEMINI_API_KEY= (This initializes api key)
+
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY") or os.environ.get("OPENROUTER_API_KEY")
+OPENROUTER_API_KEY = OPENROUTER_API_KEY.strip('"\'') if OPENROUTER_API_KEY else ""
+
+if not OPENROUTER_API_KEY:
+    raise RuntimeError(
+        "OPENROUTER_API_KEY or OPENROUTER_API_KEY is not set.\n"
+        "Set it in your environment: export OPENROUTER_API_KEY=sk-or-v1-..."
+    )
+
+client = OpenAI(
+    api_key=OPENROUTER_API_KEY,
+    base_url="https://openrouter.ai/api/v1"
+)
 
 def get_dishes_with_prep(ingredients, style, num_options=3):
     prompt = (
@@ -16,46 +29,44 @@ def get_dishes_with_prep(ingredients, style, num_options=3):
         "each with a brief estimated preparation time.\n"
         "Format as a numbered list with dish name and prep time only."
     )
-    try:
-        response = client.models.generate_content(
-            model="gemini-3-flash-preview",
-            contents=prompt
-        )
-        return response.text
-    except ClientError:
-        return None
 
+    response = client.chat.completions.create(
+        model="google/gemini-2.5-pro",
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return response.choices[0].message.content
 
 def get_recipe(dish_name, ingredients):
     prompt = (
-        f"Provide a detailed recipe for '{dish_name}' using these ingredients: {', '.join(ingredients)}.\n"
-        "Include clear step-by-step instructions."
+        f"Provide a detailed recipe for '{dish_name}' using these ingredients: "
+        f"{', '.join(ingredients)}.\nInclude clear step-by-step instructions."
     )
-    try:
-        response = client.models.generate_content(
-            model="gemini-3-flash-preview",
-            contents=prompt
-        )
-        return response.text
-    except ClientError:
-        return None
 
+    response = client.chat.completions.create(
+        model="google/gemini-2.5-pro",
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return response.choices[0].message.content
 
 def parse_dishes(dishes_text):
     if not dishes_text:
         return []
 
-    lines = dishes_text.strip().split('\n')
+    lines = dishes_text.strip().split("\n")
     dishes = []
+
     for line in lines:
-        if '.' in line:
-            part = line.split('.', 1)[1].strip()
-            dish_name = part.split('(')[0].strip()
-            dishes.append(dish_name)
+        if "." in line:
+            part = line.split(".", 1)[1].strip()
+            if " - " in part:
+                dish_name = part.split(" - ")[0].strip()
+            elif "(" in part:
+                dish_name = part.split("(")[0].strip()
+            else:
+                dish_name = part.strip()
+            dishes.append((part, dish_name))
     return dishes
 
-
-# Store data between requests (for demo purposes)
 data_store = {}
 
 @app.route("/", methods=["GET", "POST"])
@@ -65,42 +76,37 @@ def index():
         style = (request.form.get("style") or "").strip() or "simple"
         ingredients = [i.strip() for i in ingredients_input.split(",") if i.strip()]
 
-        # ✅ Try/except ensures dishes_text always exists
-        try:
-            dishes_text = get_dishes_with_prep(ingredients, style)
-        except Exception:
-            dishes_text = None
-
-        # If API failed, stay on index page and show error
-        if not dishes_text:
-            return render_template(
-                "index.html",
-                error="⚠️ AI usage limit reached or an error occurred. Please try again later.",
-                retry_after=60  # optional, for countdown
-            )
-
+        dishes_text = get_dishes_with_prep(ingredients, style, num_options=6)
         dishes = parse_dishes(dishes_text)
 
-        # Save for next step
-        data_store['ingredients'] = ingredients
-        data_store['dishes'] = dishes
+        data_store["ingredients"] = ingredients
+        data_store["dishes"] = [dish_name for _, dish_name in dishes]
 
-        return render_template("dishes.html", dishes=dishes, dishes_text=dishes_text)
+        dishes_display = [full_text for full_text, _ in dishes]
+
+        return render_template(
+            "dishes.html",
+            dishes=dishes_display
+        )
 
     return render_template("index.html")
 
-
 @app.route("/recipe/<int:dish_index>")
 def recipe(dish_index):
-    ingredients = data_store.get('ingredients')
-    dishes = data_store.get('dishes')
+    ingredients = data_store.get("ingredients")
+    dishes = data_store.get("dishes")
 
     if not ingredients or not dishes or dish_index < 0 or dish_index >= len(dishes):
-        return redirect(url_for('index'))
+        return redirect(url_for("index"))
 
     dish_name = dishes[dish_index]
     recipe_text = get_recipe(dish_name, ingredients)
-    return render_template("recipe.html", dish_name=dish_name, recipe=recipe_text)
+
+    return render_template(
+        "recipe.html",
+        dish_name=dish_name,
+        recipe=recipe_text
+    )
 
 if __name__ == "__main__":
     app.run(debug=True)
