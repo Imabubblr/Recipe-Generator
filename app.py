@@ -7,6 +7,7 @@ import os
 app = Flask(__name__)
 api_key = os.environ.get("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key)
+# set GEMINI_API_KEY= (This initializes api key)
 
 def get_dishes_with_prep(ingredients, style, num_options=3):
     prompt = (
