@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Recipe Idea Generator</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+
+<body class="bg-light">
+<div class="container py-5">
+
+    <h1 class="mb-4 text-center text-primary">🍳 Recipe Idea Generator</h1>
+
+    <!-- ERROR BAR -->
+    {% if error %}
+    <div class="alert alert-danger text-center" role="alert">
+        {{ error }}
+        {% if retry_after %}
+        <div class="mt-2">
+            Retry in <span id="countdown">{{ retry_after }}</span> seconds
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <div class="card p-4 shadow-sm">
+        <form method="POST" action="/" id="recipeForm">
+            <div class="mb-3">
+                <label class="form-label">Ingredients (comma separated):</label>
+                <input type="text" class="form-control" name="ingredients" required>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Recipe style or cuisine (optional):</label>
+                <input type="text" class="form-control" name="style">
+            </div>
+
+            <button id="submitBtn" type="submit" class="btn btn-primary w-100">
+                Generate Dish Ideas
+            </button>
+        </form>
+    </div>
+
+</div>
+
+<!-- RETRY COUNTDOWN SCRIPT -->
+{% if retry_after %}
+<script>
+let seconds = {{ retry_after }};
+const countdownEl = document.getElementById("countdown");
+const submitBtn = document.getElementById("submitBtn");
+
+submitBtn.disabled = true;
+
+const timer = setInterval(() => {
+    seconds--;
+    countdownEl.textContent = seconds;
+
+    if (seconds <= 0) {
+        clearInterval(timer);
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Try Again";
+    }
+}, 1000);
+</script>
+{% endif %}
+
+</body>
+</html>
